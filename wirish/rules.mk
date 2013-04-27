@@ -30,7 +30,11 @@ cppSRCS_$(d) += HardwareTimer.cpp
 cppSRCS_$(d) += Print.cpp
 cppSRCS_$(d) += pwm.cpp
 ifeq ($(MCU_SERIES), stm32f1)
+ifeq ($(USB_TYPE),midi)
+cppSRCS_$(d) += usb_midi.cpp
+else
 cppSRCS_$(d) += usb_serial.cpp	# HACK: this is currently STM32F1 only.
+endif
 cppSRCS_$(d) += HardwareSPI.cpp	# FIXME: port to F2 and fix wirish.h
 endif
 cppSRCS_$(d) += wirish_analog.cpp

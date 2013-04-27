@@ -19,7 +19,12 @@ ifeq ($(MCU_SERIES), stm32f1)
 ifeq ($(MCU_F1_LINE), performance)
 cSRCS_$(d) += $(MCU_SERIES)/usb.c
 cSRCS_$(d) += $(MCU_SERIES)/usb_reg_map.c
+ifeq ($(USB_TYPE),midi)
+cSRCS_$(d) += $(MCU_SERIES)/usb_midi_device.c
+cSRCS_$(d) += usb_lib/usb_midi_descr.c
+else
 cSRCS_$(d) += $(MCU_SERIES)/usb_cdcacm.c
+endif
 cSRCS_$(d) += usb_lib/usb_core.c
 cSRCS_$(d) += usb_lib/usb_init.c
 cSRCS_$(d) += usb_lib/usb_mem.c

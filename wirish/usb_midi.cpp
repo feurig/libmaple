@@ -64,36 +64,31 @@ void USBMidi::end(void) {
 #endif
 }
 
-void USBMidi::write(uint8 ch) {
-    this->write(&ch, 1);
+void USBMidi::writePacket(uint32 p) {
+    this->writePackets(&p, 1);
 }
 
-void USBMidi::write(const char *str) {
-    this->write(str, strlen(str));
-}
-
-void USBMidi::write(const void *buf, uint32 len) {
+void USBMidi::writePackets(const void *buf, uint32 len) {
     if (!this->isConnected() || !buf) {
         return;
     }
-
+    
     uint32 txed = 0;
     uint32 old_txed = 0;
     uint32 start = millis();
-
+    
     uint32 sent = 0;
-
+    
     while (txed < len && (millis() - start < USB_TIMEOUT)) {
-//        sent = usb_midi_tx_buffered((const uint8*)buf + txed, len - txed);
-        sent = usb_midi_tx((const uint8*)buf + txed, len - txed);
+        sent = usb_midi_tx((const uint32*)buf + txed, len - txed);
         txed += sent;
         if (old_txed != txed) {
             start = millis();
         }
         old_txed = txed;
     }
-
-
+    
+    
     if (sent == USB_MIDI_TX_EPSIZE) {
         while (usb_midi_is_transmitting() != 0) {
         }
@@ -102,28 +97,29 @@ void USBMidi::write(const void *buf, uint32 len) {
     }
 }
 
+
 uint32 USBMidi::available(void) {
     return usb_midi_data_available();
 }
 
-uint32 USBMidi::read(void *buf, uint32 len) {
+uint32 USBMidi::readPackets(void *buf, uint32 len) {
     if (!buf) {
         return 0;
     }
-
+    
     uint32 rxed = 0;
     while (rxed < len) {
-        rxed += usb_midi_rx((uint8*)buf + rxed, len - rxed);
+        rxed += usb_midi_rx((uint32*)buf + rxed, len - rxed);
     }
-
+    
     return rxed;
 }
 
 /* Blocks forever until 1 byte is received */
-uint8 USBMidi::read(void) {
-    uint8 b;
-    this->read(&b, 1);
-    return b;
+uint32 USBMidi::readPacket(void) {
+    uint32 p;
+    this->readPackets(&p, 1);
+    return p;
 }
 
 uint8 USBMidi::pending(void) {
