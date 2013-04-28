@@ -430,6 +430,27 @@ static void usbSetDeviceAddress(void) {
 
 
 const uint8 standardIDResponse[]={
+    MIDIv1_SYSEX_START,
+    USYSEX_NON_REAL_TIME,
+    USYSEX_ALL_CHANNELS,
+    USYSEX_GENERAL_INFO,
+    USYSEX_GI_ID_RESPONSE,
+    LEAFLABS_MMA_VENDOR_1,
+    LEAFLABS_MMA_VENDOR_2, // extended ID
+    LEAFLABS_MMA_VENDOR_3, // extended ID
+    1, // family #1
+    2, // family #2
+    1, // part   #1
+    2, // part   #2
+    0, // version 1
+    0, // version 2
+    1, // version 3
+    '!', // lgl compatible
+    MIDIv1_SYSEX_END
+};
+/*
+
+const uint8 standardIDResponse[]={
     CIN_SYSEX,
     MIDIv1_SYSEX_START,
     USYSEX_NON_REAL_TIME,
@@ -455,7 +476,8 @@ const uint8 standardIDResponse[]={
     MIDIv1_SYSEX_END,
     0
 };
-//#define STANDARD_ID_RESPONSE_LENGTH (sizeof(standardIDResponse))
+*/
+#define STANDARD_ID_RESPONSE_LENGTH (sizeof(standardIDResponse))
 
 typedef enum  {NOT_IN_SYSEX=0,COULD_BE_MY_SYSEX,YUP_ITS_MY_SYSEX,ITS_NOT_MY_SYSEX} sysexStates;
 volatile uint8 sysexBuffer[MAX_SYSEX_SIZE];
@@ -499,7 +521,8 @@ void dealWithItQuickly(){
             switch (sysexBuffer[3]) {
                 case USYSEX_GENERAL_INFO:
                     if (sysexBuffer[4]==USYSEX_GI_ID_REQUEST) {
-                        usb_midi_tx((uint32 *) standardIDResponse, STANDARD_ID_RESPONSE_LENGTH);
+                        //usb_midi_tx((uint32 *) standardIDResponse, STANDARD_ID_RESPONSE_LENGTH);
+                        usb_midi_send_sysex(standardIDResponse,17);
                     }
             }
         case USYSEX_REAL_TIME:
@@ -649,4 +672,36 @@ void usb_minimal_sysex_handler(uint32 *midiBufferRx, uint32 *rx_offset, uint32 *
     }
     // its our sysex and we will cry if we want to
     return;
+}
+#define 
+/* ---------------------------------------------------------------------------usb_midi_send_sysex()
+ * This is currently more expensive than I would like and will only send sysex
+ */
+static volatile uint8 sysexOutBuffer[256];
+uint32 usb_midi_send_sysex(uint8 *sysex, uint32 bytes2send) {
+    int j=1;
+    uint32 i=0;
+    uint32 sent=0;
+    while (bytes2send > 3 && sent<=123) {
+        sysexOutBuffer[sent++]= CIN_SYSEX;
+        sysexOutBuffer[sent++]=sysex[i++];
+        sysexOutBuffer[sent++]=sysex[i++];
+        sysexOutBuffer[sent++]=sysex[i++];
+        //usb_midi_tx((uint32 *)sysexOutBuffer, 1);
+        bytes2send-=3;
+    }
+    if (bytes2send>3) {
+        return 0;
+    }
+    sysexOutBuffer[sent++] = CIN_SYSEX+bytes2send;
+    j=3;
+    while((bytes2send--)>0) {
+        sysexOutBuffer[sent++]=sysex[i++];
+        j--;
+    }
+    while (j--) {
+        sysexOutBuffer[sent++]=0;
+    }
+    usb_midi_tx((uint32 *)sysexOutBuffer, sent/4);
+    return i;
 }

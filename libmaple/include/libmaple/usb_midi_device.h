@@ -70,6 +70,7 @@ typedef union {
 
 #define STANDARD_ID_RESPONSE_LENGTH 7
     
+#define MAX_SYSEX_LENGTH        128
     // move to LGL.h ???
 #define LGL_RESET_CMD           0x1e
     
