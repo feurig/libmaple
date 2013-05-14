@@ -68,8 +68,12 @@ typedef union {
 #define LEAFLABS_MMA_VENDOR_2   0x1E
 #define LEAFLABS_MMA_VENDOR_3   0x4F
 
-#define STANDARD_ID_RESPONSE_LENGTH 7
+//#define STANDARD_ID_RESPONSE_LENGTH 7
     
+// this is the max sysex length we want to handle.
+// this currently costs 1 + 4/3 times this number in buffer space
+//
+
 #define MAX_SYSEX_LENGTH        128
     // move to LGL.h ???
 #define LGL_RESET_CMD           0x1e
@@ -125,6 +129,7 @@ extern volatile uint8 myMidiID[];
     uint8 usb_midi_is_transmitting(void);
     void usb_minimal_sysex_handler(uint32 *midiBufferRx, uint32 *offset, uint32 *unread);
     uint32 usb_midi_send_sysex(uint8 *sysex, uint32 len);
+    uint32 usb_midi_send_debug_string(uint8 *string, uint32 len);
 
 #ifdef __cplusplus
 }

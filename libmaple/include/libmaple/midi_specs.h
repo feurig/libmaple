@@ -44,7 +44,6 @@ typedef struct
 {
     unsigned cin : 4;  // this is the low nibble.
     unsigned cable  : 4;
-//    uint8_t  cin;
     uint8_t  midi0;
     uint8_t  midi1; 
     uint8_t  midi2; 

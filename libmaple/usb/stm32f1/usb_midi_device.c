@@ -418,8 +418,6 @@ static void usbSetDeviceAddress(void) {
     USBLIB->state = USB_ADDRESSED;
 }
 
-#define MAX_SYSEX_SIZE 256
-
 /* ------------------------------------------------------------------------------------------
  * 
  *                                    Minimal Sysex Handler
@@ -448,39 +446,11 @@ const uint8 standardIDResponse[]={
     '!', // lgl compatible
     MIDIv1_SYSEX_END
 };
-/*
 
-const uint8 standardIDResponse[]={
-    CIN_SYSEX,
-    MIDIv1_SYSEX_START,
-    USYSEX_NON_REAL_TIME,
-    USYSEX_ALL_CHANNELS,
-    CIN_SYSEX,
-    USYSEX_GENERAL_INFO,
-    USYSEX_GI_ID_RESPONSE,
-    LEAFLABS_MMA_VENDOR_1,
-    CIN_SYSEX,
-    LEAFLABS_MMA_VENDOR_2, // extended ID
-    LEAFLABS_MMA_VENDOR_3, // extended ID
-    1, // family #1
-    CIN_SYSEX,
-    2, // family #2
-    1, // part   #1
-    2, // part   #2
-    CIN_SYSEX,
-    0, // version 1
-    0, // version 2
-    1, // version 3
-    CIN_SYSEX_ENDS_IN_2,
-    '!', // lgl compatible
-    MIDIv1_SYSEX_END,
-    0
-};
-*/
 #define STANDARD_ID_RESPONSE_LENGTH (sizeof(standardIDResponse))
 
 typedef enum  {NOT_IN_SYSEX=0,COULD_BE_MY_SYSEX,YUP_ITS_MY_SYSEX,ITS_NOT_MY_SYSEX} sysexStates;
-volatile uint8 sysexBuffer[MAX_SYSEX_SIZE];
+volatile uint8 sysexBuffer[MAX_SYSEX_LENGTH];
 volatile sysexStates sysexState;
 volatile int sysexFinger=0;
 volatile uint8 myMidiChannel = DEFAULT_MIDI_CHANNEL;
@@ -578,9 +548,9 @@ void usb_minimal_sysex_handler(uint32 *midiBufferRx, uint32 *rx_offset, uint32 *
             continue;
         } // else {
         if (!soPackets) {
-            soPackets=cPacket;//*4;
+            soPackets=cPacket;
         }
-        if ((sysexState==YUP_ITS_MY_SYSEX) && ((sysexFinger+3)>=MAX_SYSEX_SIZE)){
+        if ((sysexState==YUP_ITS_MY_SYSEX) && ((sysexFinger+3)>=MAX_SYSEX_LENGTH)){
             sysexState=ITS_NOT_MY_SYSEX;  //eisenhower policy. Even if its mine I cant deal with it.
         }
         switch (e.packet.cin) {
@@ -673,35 +643,135 @@ void usb_minimal_sysex_handler(uint32 *midiBufferRx, uint32 *rx_offset, uint32 *
     // its our sysex and we will cry if we want to
     return;
 }
-#define 
 /* ---------------------------------------------------------------------------usb_midi_send_sysex()
- * This is currently more expensive than I would like and will only send sysex
+ * This is currently more expensive memory wise than I would like and will only send sysex
+ * the sysexex can be complete or just the body. 
+ * all characters between start and end of the sysex will be stripped of the hi bit.
  */
-static volatile uint8 sysexOutBuffer[256];
+
+#define SYSEX_OUT_BUFFER_LENGTH (MAX_SYSEX_LENGTH*7/3)+4
+static volatile uint8 sysexOutBuffer[SYSEX_OUT_BUFFER_LENGTH];
+
 uint32 usb_midi_send_sysex(uint8 *sysex, uint32 bytes2send) {
     int j=1;
     uint32 i=0;
-    uint32 sent=0;
-    while (bytes2send > 3 && sent<=123) {
-        sysexOutBuffer[sent++]= CIN_SYSEX;
-        sysexOutBuffer[sent++]=sysex[i++];
-        sysexOutBuffer[sent++]=sysex[i++];
-        sysexOutBuffer[sent++]=sysex[i++];
+    uint32 buffered=0;
+    
+    if (bytes2send && (  sysex[bytes2send-1] != MIDIv1_SYSEX_END ) ) {
+        bytes2send++;  // make room for end of sysex
+    }
+    if (bytes2send > (SYSEX_OUT_BUFFER_LENGTH - 4)) {
+        return 0; // if its to big then fahgetaboutit
+    }
+    while (bytes2send > 3 /*&& buffered<=SYSEX_OUT_BUFFER_LENGTH */) {
+        sysexOutBuffer[buffered++]=CIN_SYSEX;
+        if (buffered==1) {
+            sysexOutBuffer[buffered++]=MIDIv1_SYSEX_START;
+            if (sysex[i]==MIDIv1_SYSEX_START){
+                i++; // note: output count will be off by 1 for incomplete sysex messages
+            }
+        } else {
+            sysexOutBuffer[buffered++]=sysex[i++] & 0x7f;
+        }
+        sysexOutBuffer[buffered++]=sysex[i++] & 0x7f;
+        sysexOutBuffer[buffered++]=sysex[i++] & 0x7f;
         //usb_midi_tx((uint32 *)sysexOutBuffer, 1);
         bytes2send-=3;
     }
-    if (bytes2send>3) {
-        return 0;
-    }
-    sysexOutBuffer[sent++] = CIN_SYSEX+bytes2send;
+    //if (bytes2send>3) { // this should already be covered above.
+    //    return 0;
+    //}
+    sysexOutBuffer[buffered++] = CIN_SYSEX+bytes2send;
     j=3;
-    while((bytes2send--)>0) {
-        sysexOutBuffer[sent++]=sysex[i++];
+    while((bytes2send--)>1) {
+        sysexOutBuffer[buffered++]= sysex[i++] & 0x7f;
         j--;
     }
+    
+    sysexOutBuffer[buffered++] = MIDIv1_SYSEX_END;
+    i++;
+    j--;
+    
     while (j--) {
-        sysexOutBuffer[sent++]=0;
+        sysexOutBuffer[buffered++]=0; // pad packets (probably unnecisary)
+        // if we eliminate this then must add j to math below.
     }
-    usb_midi_tx((uint32 *)sysexOutBuffer, sent/4);
+    usb_midi_tx((uint32 *)sysexOutBuffer, buffered/4);
     return i;
 }
+
+
+
+#define DEBUGGER_MMA_ID1 125
+#define DEBUGGER_MMA_ID2 51
+#define DEBUGGER_MMA_ID3 51
+
+uint8 debugSysexPrelude[]= {
+    MIDIv1_SYSEX_START,
+    DEBUGGER_MMA_ID1,
+    DEBUGGER_MMA_ID2, //2
+    //--
+    DEBUGGER_MMA_ID3,
+    LEAFLABS_MMA_VENDOR_1,
+    LEAFLABS_MMA_VENDOR_2,//length       5
+    //---
+    LEAFLABS_MMA_VENDOR_3,//length
+    0x00,//channel or id
+    0x00,//severity 8
+    //---
+};
+
+uint32 usb_midi_send_debug_string(uint8 *string, uint32 bytes2send) {
+
+    if (bytes2send<1)
+        return 0;
+    
+    int j=1;
+    uint32 i=0;
+    uint32 buffered=0;
+    for (i=0; i<9; i++) {
+        sysexOutBuffer[buffered++]= CIN_SYSEX;
+        sysexOutBuffer[buffered++]=debugSysexPrelude[i++];
+        sysexOutBuffer[buffered++]=debugSysexPrelude[i++];
+        sysexOutBuffer[buffered++]=debugSysexPrelude[i++];
+    }
+    j=0;i=0;
+
+    bytes2send++; // make room for end of sysex
+    
+    if ((bytes2send + buffered) > (SYSEX_OUT_BUFFER_LENGTH - 4)) {
+        return 0; // if its to big then fahgetaboutit
+    }
+    while (bytes2send > 3 /*&& buffered<=SYSEX_OUT_BUFFER_LENGTH */) {
+        sysexOutBuffer[buffered++]=CIN_SYSEX;
+        sysexOutBuffer[buffered++]=string[i++] & 0x7f;
+        sysexOutBuffer[buffered++]=string[i++] & 0x7f;
+        sysexOutBuffer[buffered++]=string[i++] & 0x7f;
+        bytes2send-=3;
+    }
+    //if (bytes2send>3) { // this should already be covered above.
+    //    return 0;
+    //}
+    sysexOutBuffer[buffered++] = CIN_SYSEX+bytes2send;
+    j=3;
+    while((bytes2send--)>1) {
+        sysexOutBuffer[buffered++]= string[i++] & 0x7f;
+        j--;
+    }
+    
+    sysexOutBuffer[buffered++] = MIDIv1_SYSEX_END;
+    //i++; // returns sent minux 
+    j--;
+    
+    while (j--) {
+        sysexOutBuffer[buffered++]=0; // pad packets (probably unnecisary)
+        // if we eliminate this then must add j to math below.
+    }
+    usb_midi_tx((uint32 *)sysexOutBuffer, buffered/4);
+    return i;
+}
+
+
+
+
+
