@@ -7,7 +7,21 @@
                                             |_|               by LeafLabs!
                                                               leaflabs.com
 
+/************************************************************************************
 
+Cloned directory with experimental modifications to Leaflabs main libmaple code
+
+Work in progress include:
+* usb-midi, currently only for stm32f1xxx targets
+* stm32f4 support, i2c is working
+* support for Netduino 2 and Netduino plus 2
+
+All experimental code needs more cleanup and testing, so it is supplied as is :)
+
+Magnus Lundin
+lundin@mlu.mine.nu
+
+*************************************************************************************/
 The latest version of this repository can be found here:
 
     https://github.com/leaflabs/libmaple
