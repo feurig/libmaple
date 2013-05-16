@@ -721,6 +721,11 @@ uint8 debugSysexPrelude[]= {
     //---
 };
 
+/*
+ * this should probably be in a different space but if we put it here we can share a buffer and 
+ * most of the code from above.
+ 
+ */
 uint32 usb_midi_send_debug_string(uint8 *string, uint32 bytes2send) {
 
     if (bytes2send<1)
