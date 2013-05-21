@@ -64,7 +64,7 @@
  *****************************************************************************/
 
 #if !(defined(BOARD_maple) || defined(BOARD_maple_RET6) ||      \
-      defined(BOARD_maple_mini) || defined(BOARD_maple_native))
+      defined(BOARD_maple_mini) || defined(BOARD_maple_midi) || defined(BOARD_maple_native))
 #warning USB MIDI relies on LeafLabs board-specific configuration.\
     You may have problems on non-LeafLabs boards.
 #endif
@@ -87,7 +87,6 @@ static void usbSetConfiguration(void);
 static void usbSetDeviceAddress(void);
 
 
-/* I/O state */
 /* I/O state */
 
 /* Received data */
@@ -232,75 +231,6 @@ uint32 usb_midi_tx(const uint32* buf, uint32 packets) {
     return packets;
 }
 
-/* 
- *     Theese functions replaces EP double buffering:
- * 
- *     usb_midi_tx_buffered(const uint8* buf, uint32 len)
- *     usb_midi_tx_send_buffer()
- * 
- *     TODO: Use the modules EP double buffering instead
- * 
- *  */
-uint32 usb_midi_tx_buffered(const uint8* buf, uint32 len) {
-    if (usb_midi_is_transmitting()) {
-		uint8 count;
-		/* Copy to TxBuffer */
-		/* Disable USB EP interrupts */
-		USB_BASE->CNTR = USB_ISR_MSK&~USB_CNTR_CTRM;
-		if (len>(USB_MIDI_TX_EPSIZE-tx_offset)) len = USB_MIDI_TX_EPSIZE-tx_offset;
-		for (count=0;count<len;count++)
-		{
-    		midiBufferTx[tx_offset+count]=buf[count];
-    	}
-		tx_offset += len;
-		/* Reenable USB EP interrupts */
-		USB_BASE->CNTR = USB_ISR_MSK&~USB_CNTR_CTRM;
-        return len;  /* return len */
-    }
-
-    /* We can only put USB_MIDI_TX_EPSIZE bytes in the buffer. */
-    if (len > USB_MIDI_TX_EPSIZE) {
-        len = USB_MIDI_TX_EPSIZE;
-    }
-
-    /* Queue bytes for sending. */
-    if (len) {
-        usb_copy_to_pma(buf, len, USB_MIDI_TX_ADDR);
-    }
-    // We still need to wait for the interrupt, even if we're sending
-    // zero bytes. (Sending zero-size packets is useful for flushing
-    // host-side buffers.)
-    usb_set_ep_tx_count(USB_MIDI_TX_ENDP, len);
-    n_unsent_bytes = len;
-    transmitting = 1;
-    usb_set_ep_tx_stat(USB_MIDI_TX_ENDP, USB_EP_STAT_TX_VALID);
-
-    return len;
-}
-
-#ifdef USETXBUFFER
-uint32 usb_midi_tx_send_buffer() {
-    if (usb_midi_is_transmitting()) {
-        return 0;
-    }
-    /* Queue bytes for sending. */
-    if (tx_offset) {
-        usb_copy_to_pma((const uint8 *)midiBufferTx, tx_offset, USB_MIDI_TX_ADDR);
-    }
-    else return 0;
-    // We still need to wait for the interrupt, even if we're sending
-    // zero bytes. (Sending zero-size packets is useful for flushing
-    // host-side buffers.)
-    usb_set_ep_tx_count(USB_MIDI_TX_ENDP, tx_offset);
-    n_unsent_bytes = tx_offset;
-    tx_offset = 0;
-    transmitting = 1;
-    usb_set_ep_tx_stat(USB_MIDI_TX_ENDP, USB_EP_STAT_TX_VALID);
-
-    return n_unsent_bytes;
-}
-#endif
-
 uint32 usb_midi_data_available(void) {
     return n_unread_packets;
 }
@@ -359,9 +289,6 @@ uint32 usb_midi_peek(uint32* buf, uint32 packets) {
 static void midiDataTxCb(void) {
     n_unsent_packets = 0;
     transmitting = 0;
-#ifdef USETXBUFFER
-    usb_midi_tx_send_buffer();
-#endif
 }
 
 static void midiDataRxCb(void) {
